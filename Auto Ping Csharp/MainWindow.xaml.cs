@@ -191,7 +191,7 @@ namespace Auto_Ping_Csharp
                 }
                 else
                 {
-                    PackCouter(false, 0);
+                    PackCouter(false, null);
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, pingparamdata.destination + " " + ICMPErrorAnalasys(pingReply.Status));
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.CurrentPing, "Failed");
                 }
@@ -222,25 +222,30 @@ namespace Auto_Ping_Csharp
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Ping worker launcher died.");
         }
 
-        public void PackCouter(bool issuccess, Int64 roundtriptime)
+        public void PackCouter(bool issuccess, object roundtriptime)
         {
             lock (statisticaccesslock)
             {
                 if (!(RTT.Count < statisticpackcount))
                 {
-                    if ((Int64)RTT[0] != 0)
+                    if (RTT[0] != null)
+                    {
                         successpackcount -= 1;
+                        totalrtt -= (Int64)RTT[0];
+                    }
                     else
                         failedpackcount -= 1;
-                    totalrtt -= (Int64)RTT[0];
+                    if (RTT[0] != null)
                     RTT.RemoveAt(0);
                 }
                 if (issuccess)
+                {
                     successpackcount += 1;
+                    totalrtt += (Int64)roundtriptime;
+                }
                 else
                     failedpackcount += 1;
                 RTT.Add(roundtriptime);
-                totalrtt += roundtriptime;
             }
         }
 
