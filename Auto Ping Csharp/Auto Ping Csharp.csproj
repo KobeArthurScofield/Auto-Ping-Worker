@@ -28,8 +28,8 @@
     <ProductName>Auto Ping Worker</ProductName>
     <PublisherName>Kobe Arthur Scofield</PublisherName>
     <OpenBrowserOnPublish>false</OpenBrowserOnPublish>
-    <ApplicationRevision>63</ApplicationRevision>
-    <ApplicationVersion>1.1.2.%2a</ApplicationVersion>
+    <ApplicationRevision>79</ApplicationRevision>
+    <ApplicationVersion>1.1.3.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
   </PropertyGroup>

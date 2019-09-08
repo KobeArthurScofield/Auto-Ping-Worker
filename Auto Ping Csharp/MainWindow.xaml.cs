@@ -235,7 +235,6 @@ namespace Auto_Ping_Csharp
                     }
                     else
                         failedpackcount -= 1;
-                    if (RTT[0] != null)
                     RTT.RemoveAt(0);
                 }
                 if (issuccess)
