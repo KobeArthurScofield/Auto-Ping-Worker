@@ -1,0 +1,63 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29215.179
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Auto Ping", "Auto Ping\Auto Ping.vcxproj", "{FC157631-9648-4CAB-AB73-25A5AE355AD3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auto Ping Csharp", "Auto Ping Csharp\Auto Ping Csharp.csproj", "{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Auto Ping Test", "Auto Ping Test\Auto Ping Test.csproj", "{A102DA7C-C41C-4C07-861D-D55B16C76909}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Debug|x64.ActiveCfg = Debug|x64
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Debug|x64.Build.0 = Debug|x64
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Debug|x86.ActiveCfg = Debug|x64
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Debug|x86.Build.0 = Debug|x64
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Release|Any CPU.ActiveCfg = Release|Win32
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Release|x64.ActiveCfg = Release|x64
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Release|x64.Build.0 = Release|x64
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Release|x86.ActiveCfg = Release|Win32
+		{FC157631-9648-4CAB-AB73-25A5AE355AD3}.Release|x86.Build.0 = Release|Win32
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Debug|x64.Build.0 = Debug|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Debug|x86.Build.0 = Debug|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Release|x64.ActiveCfg = Release|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Release|x64.Build.0 = Release|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Release|x86.ActiveCfg = Release|Any CPU
+		{DA3228D4-CBAD-4861-99B2-E67A9A0C6E7D}.Release|x86.Build.0 = Release|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Debug|x64.Build.0 = Debug|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Debug|x86.Build.0 = Debug|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Release|x64.ActiveCfg = Release|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Release|x64.Build.0 = Release|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Release|x86.ActiveCfg = Release|Any CPU
+		{A102DA7C-C41C-4C07-861D-D55B16C76909}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {16C2FEDA-CA13-4B38-B336-9F3D0708832C}
+	EndGlobalSection
+EndGlobal
