@@ -24,33 +24,60 @@ namespace Auto_Ping_Csharp
     {
         public struct PingParam
         {
-            public string destination;
-            public Int32 buffersize;
-            public bool dflag;
-            public Int32 ttl;
-            public Int32 timeout;
-            public Int32 interval;
+            public string   destination;
+            public Int32    buffersize;
+            public bool     dflag;
+            public Int32    ttl;
+            public Int32    timeout;
+            public Int32    interval;
+        };
+    }
+
+    public class ValueSign
+    {
+        public enum StatusSign
+        {
+            NetworkAvailability =   1,
+            Loopback            =   2,
+            SmoothPing          =   3,
+            PackageLoss         =   4,
+            CurrentPing         =   5,
+            Exception           =  -1,
+            Error               =  -2,
+            Warning             =  -3,
+            Important           =  -4,
+            Information         =  -5
+        };
+
+        public enum FieldSign
+        {
+            Destination = 1,
+            BufferSize  = 2,
+            TTL         = 3,
+            TimeOut     = 4,
+            Interval    = 5
         };
     }
 
     public partial class MainWindow : Window
     {
-        public delegate void StatusUpdater(Int32 updatefield, string data);
-        public delegate void FieldUpdater(Int32 updatefield, string data);
+        public delegate void StatusUpdater(ValueSign.StatusSign updatefield, string data);
+        public delegate void FieldUpdater(ValueSign.FieldSign updatefield, string data);
         public Thread localcheck, networkstate, pingworker;
-        public static Int32 default_buffer = 32, default_ttl = 64, default_timeout = 5000, default_interval = 1000, default_timewindow = 120000;
+        public static Int32 default_buffer = 32, default_ttl = 64, default_timeout = 5000, default_interval = 1000, default_timewindow = 120000,
+            default_networkcheckinterval = 4000, default_loopbackcheckinterval = 4000;
         public ArrayList RTT = new ArrayList();
         public Int32 statisticpackcount, sentpackcount, successpackcount, failedpackcount;
         public Int64 totalrtt;
         public EventWaitHandle alwayson = new EventWaitHandle(false, EventResetMode.ManualReset);
         public EventWaitHandle controlon = new EventWaitHandle(false, EventResetMode.ManualReset);
-        public EventWaitHandle sign = new EventWaitHandle(false, EventResetMode.AutoReset);
-        
 
         public MainWindow()
         {
             InitializeComponent();
-            Stop_Button.IsEnabled = false;
+            StatusUpdater statusUpdater = StdUpd;
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Program initialized");
+            UIElementEnabler(true);
             localcheck = new Thread(new ThreadStart(LocalTestLauncher))
             {
                 IsBackground = true,
@@ -64,14 +91,20 @@ namespace Auto_Ping_Csharp
                 Priority = ThreadPriority.Lowest
             };
             alwayson.Reset();
-            localcheck.Start();
             networkstate.Start();
+            localcheck.Start();
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Launcher launched.");
         }
 
         public void LocalTestLauncher()
         {
-            Timer timer = new Timer(LocalTest, new AutoResetEvent(false), 0, 4000);
+            Int32 loopbackcheckinterval = default_loopbackcheckinterval;
+            StatusUpdater statusUpdater = StdUpd;
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Loopback check launcher started, check interval: " + loopbackcheckinterval.ToString() + "ms.");
+            Timer timer = new Timer(LocalTest, new AutoResetEvent(false), 0, loopbackcheckinterval);
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Loopback check service started.");
             alwayson.WaitOne();
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, "Loopback check launcher dying.");
             timer.Dispose(alwayson);
         }
 
@@ -79,7 +112,7 @@ namespace Auto_Ping_Csharp
         {
             Ping loopbackping = new Ping();
             bool loopv4, loopv6;
-            StatusUpdater update = StdUpd;
+            StatusUpdater statusUpdate = StdUpd;
             PingReply rplv4 = loopbackping.Send("127.0.0.1", 500), rplv6 = loopbackping.Send("::1", 500);
             if (rplv4.Status == IPStatus.Success)
                 loopv4 = true;
@@ -90,18 +123,25 @@ namespace Auto_Ping_Csharp
             else
                 loopv6 = false;
             if (loopv4 && loopv6)
-                Dispatcher.Invoke(update, 2, "V4/V6");
+                Dispatcher.Invoke(statusUpdate, ValueSign.StatusSign.Loopback, "V4/V6");
             else if(loopv4)
-                Dispatcher.Invoke(update, 2, "V4");
+                Dispatcher.Invoke(statusUpdate, ValueSign.StatusSign.Loopback, "V4");
             else if(loopv6)
-                Dispatcher.Invoke(update, 2, "V6");
+                Dispatcher.Invoke(statusUpdate, ValueSign.StatusSign.Loopback, "V6");
             else
-                Dispatcher.Invoke(update, 2, "Failed");
+                Dispatcher.Invoke(statusUpdate, ValueSign.StatusSign.Loopback, "Failed");
+            if(!localcheck.IsAlive)
+            {
+                Dispatcher.Invoke(statusUpdate, ValueSign.StatusSign.Loopback, "Unknown");
+                Dispatcher.Invoke(statusUpdate, ValueSign.StatusSign.Error, "Loopback check launcher died.");
+            }
         }
 
         public void PingerLauncher(object pingparam)
         {
+            StatusUpdater statusUpdater = StdUpd;
             DataSct.PingParam pingparamdata = (DataSct.PingParam)pingparam;
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Ping worker launcher started.");
             statisticpackcount = default_timewindow / pingparamdata.interval;
             sentpackcount = 0;
             successpackcount = 0;
@@ -109,9 +149,10 @@ namespace Auto_Ping_Csharp
             totalrtt = 0;
             RTT.Clear();
             Timer timer = new Timer(Pinger, pingparam, 0, pingparamdata.interval);
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Ping worker service started.");
             controlon.WaitOne();
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, "Ping worker launcher dying.");
             timer.Dispose(controlon);
-            sign.Set();
         }
 
         public void Pinger(object pingparam)
@@ -127,13 +168,15 @@ namespace Auto_Ping_Csharp
                 if (pingReply.Status == IPStatus.Success)
                 {
                     PackCouter(true, pingReply.RoundtripTime);
-                    Dispatcher.Invoke(statusUpdater, 5, "OK");
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.CurrentPing, "OK " + Convert.ToString(pingReply.RoundtripTime) + "ms");
+                    if ((pingReply.RoundtripTime > pingparamdata.interval) && (pingparamdata.interval > 500))
+                        Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, pingparamdata.destination + " ICMP reply latecy too long: " + Convert.ToString(pingReply.RoundtripTime) + "ms");
                 }
                 else
                 {
                     PackCouter(false, 0);
-                    Dispatcher.Invoke(statusUpdater, -1, DateTime.UtcNow.ToString() + " " + pingparamdata.destination + " " + ICMPErrorAnalasys(pingReply.Status));
-                    Dispatcher.Invoke(statusUpdater, 5, "Failed");
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, pingparamdata.destination + " " + ICMPErrorAnalasys(pingReply.Status));
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.CurrentPing, "Failed");
                 }
             }
             catch (Exception exception)
@@ -144,8 +187,16 @@ namespace Auto_Ping_Csharp
             Int32 averagepingtime, packetlossrate;
             averagepingtime = (Int32)(Math.Ceiling(((double)totalrtt) / ((double)successpackcount)));
             packetlossrate = (Int32)(Math.Ceiling((double)failedpackcount) / ((double)sentpackcount) * 100.0);
-            Dispatcher.Invoke(statusUpdater, 3, averagepingtime.ToString());
-            Dispatcher.Invoke(statusUpdater, 4, packetlossrate.ToString());
+            if (averagepingtime < 0)
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.SmoothPing, "No Value");
+            else
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.SmoothPing, averagepingtime.ToString());
+            if (packetlossrate < 0)
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.SmoothPing, "100");
+            else
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.PackageLoss, packetlossrate.ToString());
+            if (!pingworker.IsAlive)
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Ping worker launcher died.");
         }
 
         public void PackCouter(bool issuccess, Int64 roundtriptime)
@@ -169,8 +220,13 @@ namespace Auto_Ping_Csharp
 
         public void NetworkStateLauncher()
         {
-            Timer timer = new Timer(NetworkState, new AutoResetEvent(false), 0, 4000);
+            Int32 networkcheckinterval = default_networkcheckinterval;
+            StatusUpdater statusUpdater = StdUpd;
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Network availability check launcher started,interval: " + Convert.ToString(networkcheckinterval) + "ms."); ;
+            Timer timer = new Timer(NetworkState, new AutoResetEvent(false), 0, networkcheckinterval);
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Network availability check service started.");
             alwayson.WaitOne();
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, "Network availability check launcher dying.");
             timer.Dispose(alwayson);
         }
 
@@ -178,35 +234,44 @@ namespace Auto_Ping_Csharp
         {
             StatusUpdater statusUpdater = StdUpd;
             if (NetworkInterface.GetIsNetworkAvailable())
-                Dispatcher.Invoke(statusUpdater, 1, "Available");
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.NetworkAvailability, "Available");
             else
-                Dispatcher.Invoke(statusUpdater, 1, "Not Available");
-        }
-
-        public void StdUpd(Int32 field, string data)
-        {
-            switch(field)
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.NetworkAvailability, "Not Available");
+            if(!networkstate.IsAlive)
             {
-                case 1: NWStatus.Content = "Network Status: " + data; break;
-                case 2: LCPing.Content = "Loopback: " + data; break;
-                case 3: Average_Ping.Content = "Ping: " + data + "ms"; break;
-                case 4: Pack_Loss.Content = "PL:" + data + "%"; break;
-                case 5: Ping_Status.Content = "Current Ping: " + data; break;
-                case -1: Error_Status.Text += (data + '\n'); break;
-                default:break;
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.NetworkAvailability, "Unknown");
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Network availability check launcher died.");
             }
         }
 
-        public void FldUpd(Int32 field, string data)
+        public void StdUpd(ValueSign.StatusSign field, string data)
         {
             switch(field)
             {
-                case 1: Destination_Fill.Text = data; break;
-                case 2: Buffer_Size.Text = data; break;
-                case 3: TTL_Count.Text = data; break;
-                case 4: Timeout_Count.Text = data; break;
-                case 5: Interval_Count.Text = data; break;
-                default: StdUpd(-1, "WTH"); break;
+                case ValueSign.StatusSign.NetworkAvailability:  NWStatus.Content = "Network Status: " + data;           break;
+                case ValueSign.StatusSign.Loopback:             LCPing.Content = "Loopback: " + data;                   break;
+                case ValueSign.StatusSign.SmoothPing:           Average_Ping.Content = "Smooth Ping: " + data + "ms";   break;
+                case ValueSign.StatusSign.PackageLoss:          Pack_Loss.Content = "PL:" + data + "%";                 break;
+                case ValueSign.StatusSign.CurrentPing:          Ping_Status.Content = "Current Ping: " + data;          break;
+                case ValueSign.StatusSign.Exception:    Logcat_Display.Text += (DateTime.UtcNow.ToString() + " XX" + data + "\n"); break;
+                case ValueSign.StatusSign.Error:        Logcat_Display.Text += (DateTime.UtcNow.ToString() + " X " + data + "\n"); break;
+                case ValueSign.StatusSign.Warning:      Logcat_Display.Text += (DateTime.UtcNow.ToString() + " ! " + data + "\n"); break;
+                case ValueSign.StatusSign.Important:    Logcat_Display.Text += (DateTime.UtcNow.ToString() + " o " + data + "\n"); break;
+                case ValueSign.StatusSign.Information:  Logcat_Display.Text += (DateTime.UtcNow.ToString() + " i " + data + "\n"); break;
+                default: Logcat_Display.Text += (DateTime.UtcNow.ToString() + "???" + data + "\n"); break;
+            }
+        }
+
+        public void FldUpd(ValueSign.FieldSign field, string data)
+        {
+            switch(field)
+            {
+                case ValueSign.FieldSign.Destination:   Destination_Fill.Text = data;   break;
+                case ValueSign.FieldSign.BufferSize:    Buffer_Size.Text = data;        break;
+                case ValueSign.FieldSign.TTL:           TTL_Count.Text = data;          break;
+                case ValueSign.FieldSign.TimeOut:       Timeout_Count.Text = data;      break;
+                case ValueSign.FieldSign.Interval:      Interval_Count.Text = data;     break;
+                default: StdUpd(ValueSign.StatusSign.Error, "WTH"); break;
             }
         }
 
@@ -220,24 +285,34 @@ namespace Auto_Ping_Csharp
             return flag;
         }
 
-        public Int32 CheckNumberBetween(string input, Int32 min, Int32 max)
+        public Int32 CheckNumberBetween(Int32 input, Int32 min, Int32 max)
         {
-            Int32 result;
-            result = Convert.ToInt32(input);
+            Int32 result = input;
             if (result >= min && result <= max)
                 return result;
             else
                 return -1;
         }
 
-        public Int32 CheckNumberLarger(string input,Int32 floor)
+        public Int32 CheckNumberLarger(Int32 input,Int32 floor)
         {
-            Int32 result;
-            result = Convert.ToInt32(input);
+            Int32 result = input;
             if (result >= floor)
                 return result;
             else
                 return -1;
+        }
+
+        private void UIElementEnabler(bool enabler)
+        {
+            Destination_Fill.IsEnabled = enabler;
+            Buffer_Size.IsEnabled = enabler;
+            Is_DF.IsEnabled = enabler;
+            TTL_Count.IsEnabled = enabler;
+            Timeout_Count.IsEnabled = enabler;
+            Interval_Count.IsEnabled = enabler;
+            Start_Button.IsEnabled = enabler;
+            Stop_Button.IsEnabled = !enabler;
         }
 
         public string ICMPErrorAnalasys(IPStatus iPStatus)
@@ -269,28 +344,29 @@ namespace Auto_Ping_Csharp
                 case IPStatus.TtlReassemblyTimeExceeded: return "Some of fragments lost";
                 case IPStatus.UnrecognizedNextHeader: return "Not a readable TCP or UDP indicator";
                 case IPStatus.Unknown: return "Unknoun reason";
-                default: return "Unknown callback";
+                default: return "Unknown Error";
             }
         }
 
         public void ExceptionLogcat(Exception exception)
         {
             StatusUpdater statusUpdater = StdUpd;
-            Dispatcher.Invoke(statusUpdater, -1, DateTime.Now.ToString());
+            string exceptioninformation = "----EXCEPTION----\n";
             if (exception.Message != null)
-                Dispatcher.Invoke(statusUpdater, -1, "==MESSAGE==\n" + exception.Message);
+                exceptioninformation += ("==MESSAGE==\n" + exception.Message + "\n");
             if (exception.InnerException != null)
-                Dispatcher.Invoke(statusUpdater, -1, "==INNER EXCEPTION==\n" + exception.InnerException.ToString());
+                exceptioninformation += ("==INNER EXCEPTION==\n" + exception.InnerException.ToString() + "\n");
             if (exception.Source != null)
-                Dispatcher.Invoke(statusUpdater, -1, "==Source==\n" + exception.Source);
+                exceptioninformation += ("==Source==\n" + exception.Source + "\n");
             if (exception.TargetSite != null)
-                Dispatcher.Invoke(statusUpdater, -1, "==TARGET SIZE==\n" + exception.TargetSite.ToString());
+                exceptioninformation += ("==TARGET SITE==\n" + exception.TargetSite.ToString() + "\n");
             if (exception.Data != null)
-                Dispatcher.Invoke(statusUpdater, -1, "==DATA==\n" + exception.Data.ToString());
+                exceptioninformation += ("==DATA==\n" + exception.Data.ToString() + "\n");
             if (exception.StackTrace != null)
-                Dispatcher.Invoke(statusUpdater, -1, "==STACK TRACE==\n" + exception.StackTrace);
+                exceptioninformation += ("==STACK TRACE==\n" + exception.StackTrace + "\n");
             if (exception.HelpLink != null)
-                Dispatcher.Invoke(statusUpdater, -1, "==HELP LINK==\n" + exception.HelpLink);
+                exceptioninformation += ("==HELP LINK==\n" + exception.HelpLink + "\n");
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Exception, exceptioninformation);
         }
 
         private void Start_Button_Click(object sender, RoutedEventArgs e)
@@ -303,6 +379,7 @@ namespace Auto_Ping_Csharp
             byte checker = 0x00;    //A bitfield checker
             FieldUpdater fieldUpdater = FldUpd;
             StatusUpdater statusUpdater = StdUpd;
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Statring validation...");
             //Valid IP or domain name
             if (Destination_Fill.Text != "")
             {
@@ -310,64 +387,65 @@ namespace Auto_Ping_Csharp
                 checker = (byte)(checker | (byte)0x01);
             }
             else
-                Dispatcher.Invoke(statusUpdater, -1, "No destination filled.");
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "No destination filled.");
             //Valid buffer size
             if (Buffer_Size.Text != "")
                 if (CheckANumber(Buffer_Size.Text))
-                    if ((bufferlength = CheckNumberBetween(Buffer_Size.Text, 32, 65500)) != -1)
+                    if ((bufferlength = CheckNumberBetween(Convert.ToInt32(Buffer_Size.Text), 32, 65500)) != -1)
                         checker = (byte)(checker | (byte)0x02);
                     else
-                        Dispatcher.Invoke(statusUpdater, -1, "Invalid buffer size setting.");
+                        Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid buffer size setting.");
                 else
-                    Dispatcher.Invoke(statusUpdater, -1, "Invalid buffer size Input.");
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid buffer size Input.");
             else
             {
-                Dispatcher.Invoke(fieldUpdater, 2, bufferlength.ToString());
+                Dispatcher.Invoke(fieldUpdater, ValueSign.FieldSign.BufferSize, bufferlength.ToString());
                 checker = (byte)(checker | (byte)0x02);
             }
             //Valid TTL
             if (TTL_Count.Text != "")
                 if (CheckANumber(TTL_Count.Text))
-                    if ((ttlvalue = CheckNumberBetween(TTL_Count.Text, 1, 255)) != -1)
+                    if ((ttlvalue = CheckNumberBetween(Convert.ToInt32(TTL_Count.Text), 1, 255)) != -1)
                         checker = (byte)(checker | (byte)0x04);
                     else
-                        Dispatcher.Invoke(statusUpdater, -1, "Invalid TTL Value.");
+                        Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid TTL Value.");
                 else
-                    Dispatcher.Invoke(statusUpdater, -1, "Invalid TTL Input.");
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid TTL Input.");
             else
             {
-                Dispatcher.Invoke(fieldUpdater, 3, ttlvalue.ToString());
+                Dispatcher.Invoke(fieldUpdater, ValueSign.FieldSign.TTL, ttlvalue.ToString());
                 checker = (byte)(checker | (byte)0x04);
             }
             //Valid Timeout
             if (Timeout_Count.Text != "")
                 if (CheckANumber(Timeout_Count.Text))
-                    if ((timeout = CheckNumberLarger(Timeout_Count.Text, 1)) != -1)
+                    if ((timeout = CheckNumberLarger(Convert.ToInt32(Timeout_Count.Text), 1)) != -1)
                         checker = (byte)(checker | (byte)0x08);
                     else { }
                 else
-                    Dispatcher.Invoke(statusUpdater, -1, "Invalid timeout input.");
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid timeout input.");
             else
             {
-                Dispatcher.Invoke(fieldUpdater, 4, timeout.ToString());
+                Dispatcher.Invoke(fieldUpdater, ValueSign.FieldSign.TimeOut, timeout.ToString());
                 checker = (byte)(checker | (byte)0x08);
             }
             //Valid interval
             if (Interval_Count.Text != "")
                 if (CheckANumber(Interval_Count.Text))
-                    if ((interval = CheckNumberLarger(Interval_Count.Text, 1)) != -1)
+                    if ((interval = CheckNumberLarger(Convert.ToInt32(Interval_Count.Text), 1)) != -1)
                         checker = (byte)(checker | (byte)0x10);
                     else { }
                 else
-                    Dispatcher.Invoke(statusUpdater, -1, "Invalid interval input.");
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid interval input.");
             else
             {
-                Dispatcher.Invoke(fieldUpdater, 5, interval.ToString());
+                Dispatcher.Invoke(fieldUpdater, ValueSign.FieldSign.Interval, interval.ToString());
                 checker = (byte)(checker | (byte)0x10);
             }
             //Check Valid
             if (checker == 0x1F)
             {
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Validation completed, preparing...");
                 DataSct.PingParam pingparamdata = new DataSct.PingParam
                 {
                     destination = dest,
@@ -377,9 +455,7 @@ namespace Auto_Ping_Csharp
                     timeout = timeout,
                     interval = interval
                 };
-                Stop_Button.IsEnabled = true;
-                Start_Button.IsEnabled = false;
-                Error_Status.Text = null;
+                UIElementEnabler(false);
                 pingworker = new Thread(new ParameterizedThreadStart(PingerLauncher))
                 {
                     IsBackground = true,
@@ -388,22 +464,30 @@ namespace Auto_Ping_Csharp
                 };
                 controlon.Reset();
                 pingworker.Start((object)pingparamdata);
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Ping worker launcher has been called.");
             }
+            else
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Validation failed for wrong parameters.");
         }
 
         private void Stop_Button_Click(object sender, RoutedEventArgs e)
         {
+            StatusUpdater statusUpdater = StdUpd;
+            if (pingworker.IsAlive)
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Calling ping worker launcher to the hell...");
             controlon.Set();
-            sign.WaitOne();
-            Error_Status.Text += "\n";
-            Start_Button.IsEnabled = true;
-            Stop_Button.IsEnabled = false;
+            UIElementEnabler(true);
         }
 
         private void MainWindowClosed(object sender, EventArgs e)
         {
             controlon.Set();
             alwayson.Set();
+        }
+
+        private void Logcat_Display_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            Logcat_Display.ScrollToEnd();
         }
     }
 }

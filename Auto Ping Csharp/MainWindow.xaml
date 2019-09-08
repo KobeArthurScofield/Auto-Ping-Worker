@@ -55,12 +55,12 @@
             <Button x:Name="Stop_Button" Style="{StaticResource ButtonStyle}" Margin="120,280,0,0" Click="Stop_Button_Click">Stop</Button>
         </Grid>
         <Grid Style="{StaticResource Base}" Width="368" Height="320" Margin="224,0,0,0">
-            <TextBox x:Name="Error_Status" Width="336" Height="280" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Visible"  Panel.ZIndex="2"/>
+            <TextBox x:Name="Logcat_Display" Width="336" Height="280" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Visible" FontFamily="Consolas, Lucida Console" Panel.ZIndex="2" TextChanged="Logcat_Display_TextChanged"/>
         </Grid>
         <StatusBar Width="594" Height="24" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,320,0,0" Panel.ZIndex="1">
             <StatusBarItem x:Name="NWStatus" Content="Network Status: "/>
             <StatusBarItem x:Name="LCPing" Content="Loopback: "/>
-            <StatusBarItem x:Name="Average_Ping" Content="Ping: "/>
+            <StatusBarItem x:Name="Average_Ping" Content="Smooth Ping: "/>
             <StatusBarItem x:Name="Pack_Loss" Content="PL: "/>
             <StatusBarItem x:Name="Ping_Status" Content="Current Ping: "/>
         </StatusBar>
