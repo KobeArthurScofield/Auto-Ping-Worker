@@ -12,6 +12,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Net.NetworkInformation;
+using System.Net;
 using System.Threading;
 using System.Collections;
 
@@ -24,12 +25,13 @@ namespace Auto_Ping_Csharp
     {
         public struct PingParam
         {
-            public string   destination;
-            public Int32    buffersize;
-            public bool     dflag;
-            public Int32    ttl;
-            public Int32    timeout;
-            public Int32    interval;
+            public string       destination;
+            public IPAddress    destinationaddress;
+            public Int32        buffersize;
+            public bool         dflag;
+            public Int32        ttl;
+            public Int32        timeout;
+            public Int32        interval;
         };
     }
 
@@ -147,26 +149,38 @@ namespace Auto_Ping_Csharp
         public void PingerLauncher(object pingparam)
         {
             StatusUpdater statusUpdater = StdUpd;
-            DataSct.PingParam pingparamdata = (DataSct.PingParam)pingparam;
             Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Ping worker launcher started.");
-            lock (totalaccesslock)
+            DataSct.PingParam pingparamdata = (DataSct.PingParam)pingparam;
+            bool pingallowed;
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Fetching IP...");
+            if ((pingparamdata.destinationaddress = FetchHostAddress(pingparamdata.destination)) != null)
+                pingallowed = true;
+            else
+                pingallowed = false;
+            if (pingallowed)
             {
-                statisticpackcount = default_timewindow / pingparamdata.interval;
-                sentpackcount = 0;
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Destination check OK.");
+                lock (totalaccesslock)
+                {
+                    statisticpackcount = default_timewindow / pingparamdata.interval;
+                    sentpackcount = 0;
+                }
+                lock (statisticaccesslock)
+                {
+                    successpackcount = 0;
+                    failedpackcount = 0;
+                    totalrtt = 0;
+                    RTT.Clear();
+                }
+                Timer timer = new Timer(Pinger, pingparamdata, 0, pingparamdata.interval);
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Ping worker lighter started.");
+                controlon.WaitOne();
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, "Ping worker launcher dying.");
+                timer.Dispose(controlon);
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, "Ping worker lighter broken.");
             }
-            lock (statisticaccesslock)
-            {
-                successpackcount = 0;
-                failedpackcount = 0;
-                totalrtt = 0;
-                RTT.Clear();
-            }
-            Timer timer = new Timer(Pinger, pingparam, 0, pingparamdata.interval);
-            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Ping worker lighter started.");
-            controlon.WaitOne();
-            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, "Ping worker launcher dying.");
-            timer.Dispose(controlon);
-            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, "Ping worker lighter broken.");
+            else
+                Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Network error or wrong destination, ping worker launcher dying.");
         }
 
         public void Pinger(object pingparam)
@@ -174,9 +188,14 @@ namespace Auto_Ping_Csharp
             DataSct.PingParam pingparamdata = (DataSct.PingParam)pingparam;
             Ping pingwork = new Ping();
             StatusUpdater statusUpdater = StdUpd;
+            string destinationdisplay;
+            if (string.Compare(pingparamdata.destination, pingparamdata.destinationaddress.ToString()) != 0)
+                destinationdisplay = pingparamdata.destination + " (" + pingparamdata.destinationaddress + ")";
+            else
+                destinationdisplay = pingparamdata.destination;
             try
             {
-                PingReply pingReply = pingwork.Send(pingparamdata.destination, pingparamdata.timeout, new byte[pingparamdata.buffersize], new PingOptions(pingparamdata.ttl, pingparamdata.dflag));
+                PingReply pingReply = pingwork.Send(pingparamdata.destinationaddress, pingparamdata.timeout, new byte[pingparamdata.buffersize], new PingOptions(pingparamdata.ttl, pingparamdata.dflag));
                 lock (totalaccesslock)
                 {
                     if (sentpackcount < statisticpackcount)
@@ -187,12 +206,12 @@ namespace Auto_Ping_Csharp
                     PackCouter(true, pingReply.RoundtripTime);
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.CurrentPing, pingReply.RoundtripTime.ToString("0ms"));
                     if (((pingReply.RoundtripTime > pingparamdata.interval) && (pingparamdata.interval > 500)) || (pingReply.RoundtripTime >= 1000))
-                        Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, pingparamdata.destination + " ICMP reply latecy too long: " + pingReply.RoundtripTime.ToString("0ms"));
+                        Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, destinationdisplay + " ICMP reply latecy too long: " + pingReply.RoundtripTime.ToString("0ms"));
                 }
                 else
                 {
                     PackCouter(false, null);
-                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, pingparamdata.destination + " " + ICMPErrorAnalasys(pingReply.Status));
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, destinationdisplay + " " + ICMPErrorAnalasys(pingReply.Status));
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.CurrentPing, "Failed");
                 }
             }
@@ -276,6 +295,34 @@ namespace Auto_Ping_Csharp
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.NetworkAvailability, "Unknown");
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Network availability check launcher died.");
             }
+        }
+
+        public IPAddress FetchHostAddress(string sourceinput)
+        {
+            IPAddress[] addresspending;
+            IPAddress addressreturn = null;
+            try
+            {
+                addresspending = Dns.GetHostAddresses(sourceinput);
+                if (addresspending[0] != null)
+                    for (Int32 i = 0; i < addresspending.Length; i++)
+                    {
+                        Ping ping = new Ping();
+                        PingReply pingReply = ping.Send(addresspending[i], 20);
+                        if (pingReply.Status != IPStatus.BadDestination)
+                        {
+                            addressreturn = addresspending[i];
+                            break;
+                        }
+                        else if (i == (addresspending.Length - 1))
+                            addressreturn = addresspending[0];
+                    }
+            }
+            catch (Exception exception)
+            {
+                ExceptionLogcat(exception);
+            }
+            return addressreturn;
         }
 
         public void StdUpd(ValueSign.StatusSign field, string data)
