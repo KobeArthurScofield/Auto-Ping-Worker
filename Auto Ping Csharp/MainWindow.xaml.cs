@@ -27,6 +27,7 @@ namespace Auto_Ping_Csharp
         {
             public string       destination;
             public IPAddress    destinationaddress;
+            public string       resolvedhostname;
             public Int32        buffersize;
             public bool         dflag;
             public Int32        ttl;
@@ -153,7 +154,10 @@ namespace Auto_Ping_Csharp
             DataSct.PingParam pingparamdata = (DataSct.PingParam)pingparam;
             bool pingallowed;
             Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Fetching IP...");
-            if ((pingparamdata.destinationaddress = FetchHostAddress(pingparamdata.destination)) != null)
+            DataSct.PingParam receivehostentry = FetchHostAddress(pingparamdata.destination);
+            pingparamdata.resolvedhostname = receivehostentry.resolvedhostname;
+            pingparamdata.destinationaddress = receivehostentry.destinationaddress;
+            if (pingparamdata.destinationaddress != null)
                 pingallowed = true;
             else
                 pingallowed = false;
@@ -188,11 +192,15 @@ namespace Auto_Ping_Csharp
             DataSct.PingParam pingparamdata = (DataSct.PingParam)pingparam;
             Ping pingwork = new Ping();
             StatusUpdater statusUpdater = StdUpd;
-            string destinationdisplay;
-            if (string.Compare(pingparamdata.destination, pingparamdata.destinationaddress.ToString()) != 0)
-                destinationdisplay = pingparamdata.destination + " (" + pingparamdata.destinationaddress + ")";
+            string destinationdisplay, destinationresolvedname;
+            if (pingparamdata.resolvedhostname != null)
+                destinationresolvedname = pingparamdata.resolvedhostname;
             else
-                destinationdisplay = pingparamdata.destination;
+                destinationresolvedname = pingparamdata.destination;
+            if (string.Compare(destinationresolvedname, pingparamdata.destinationaddress.ToString(), true) != 0)
+                destinationdisplay = destinationresolvedname + " (" + pingparamdata.destinationaddress.ToString() + ")";
+            else
+                destinationdisplay = pingparamdata.destinationaddress.ToString();
             try
             {
                 PingReply pingReply = pingwork.Send(pingparamdata.destinationaddress, pingparamdata.timeout, new byte[pingparamdata.buffersize], new PingOptions(pingparamdata.ttl, pingparamdata.dflag));
@@ -297,10 +305,11 @@ namespace Auto_Ping_Csharp
             }
         }
 
-        public IPAddress FetchHostAddress(string sourceinput)
+        public DataSct.PingParam FetchHostAddress(string sourceinput)
         {
             IPAddress[] addresspending;
             IPAddress addressreturn = null;
+            string resolvedhostname = null;
             try
             {
                 addresspending = Dns.GetHostAddresses(sourceinput);
@@ -312,17 +321,22 @@ namespace Auto_Ping_Csharp
                         if (pingReply.Status != IPStatus.BadDestination)
                         {
                             addressreturn = addresspending[i];
+                            resolvedhostname = Dns.GetHostEntry(addressreturn).HostName;
                             break;
                         }
                         else if (i == (addresspending.Length - 1))
+                        {
                             addressreturn = addresspending[0];
+                            resolvedhostname = Dns.GetHostEntry(addressreturn).HostName;
+                        }
                     }
             }
             catch (Exception exception)
             {
-                ExceptionLogcat(exception);
+                if (addressreturn == null)
+                    ExceptionLogcat(exception);
             }
-            return addressreturn;
+            return new DataSct.PingParam { destinationaddress = addressreturn, resolvedhostname = resolvedhostname };
         }
 
         public void StdUpd(ValueSign.StatusSign field, string data)
