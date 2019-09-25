@@ -81,6 +81,12 @@ namespace Auto_Ping_Csharp
         public MainWindow()
         {
             InitializeComponent();
+            InitWorker();
+        }
+
+        public void InitWorker()
+        {
+            Logcat_Display.Text = null;
             StatusUpdater statusUpdater = StdUpd;
             Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Program initialized");
             UIElementEnabler(true);
@@ -153,7 +159,7 @@ namespace Auto_Ping_Csharp
             Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Ping worker launcher started.");
             DataSct.PingParam pingparamdata = (DataSct.PingParam)pingparam;
             bool pingallowed;
-            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Fetching IP...");
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Fetching Address...");
             DataSct.PingParam receivehostentry = FetchHostAddress(pingparamdata.destination);
             pingparamdata.resolvedhostname = receivehostentry.resolvedhostname;
             pingparamdata.destinationaddress = receivehostentry.destinationaddress;
@@ -164,6 +170,7 @@ namespace Auto_Ping_Csharp
             if (pingallowed)
             {
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Destination check OK.");
+                controlon.Reset();
                 lock (totalaccesslock)
                 {
                     statisticpackcount = default_timewindow / pingparamdata.interval;
@@ -213,7 +220,7 @@ namespace Auto_Ping_Csharp
                 {
                     PackCouter(true, pingReply.RoundtripTime);
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.CurrentPing, pingReply.RoundtripTime.ToString("0ms"));
-                    if (((pingReply.RoundtripTime > pingparamdata.interval) && (pingparamdata.interval > 500)) || (pingReply.RoundtripTime >= 1000))
+                    if (((pingReply.RoundtripTime > pingparamdata.interval) && (pingparamdata.interval >= 500)) || (pingReply.RoundtripTime >= 1000))
                         Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, destinationdisplay + " ICMP reply latecy too long: " + pingReply.RoundtripTime.ToString("0ms"));
                 }
                 else
@@ -226,7 +233,6 @@ namespace Auto_Ping_Csharp
             catch (Exception exception)
             {
                 ExceptionLogcat(exception);
-                controlon.Set();
             }
             double averagepingtime, packetlossrate;
             lock (statisticaccesslock)
@@ -307,34 +313,32 @@ namespace Auto_Ping_Csharp
 
         public DataSct.PingParam FetchHostAddress(string sourceinput)
         {
-            IPAddress[] addresspending;
+            IPAddress[] addresspending = null;
             IPAddress addressreturn = null;
             string resolvedhostname = null;
             try
             {
-                addresspending = Dns.GetHostAddresses(sourceinput);
-                if (addresspending[0] != null)
-                    for (Int32 i = 0; i < addresspending.Length; i++)
+                if (!IPAddress.TryParse(sourceinput, out addressreturn))
+                    if ((addresspending = Dns.GetHostAddresses(sourceinput)) != null)
                     {
-                        Ping ping = new Ping();
-                        PingReply pingReply = ping.Send(addresspending[i], 20);
-                        if (pingReply.Status != IPStatus.BadDestination)
+                        for (Int32 i = 0; i < addresspending.Length; i++)
                         {
-                            addressreturn = addresspending[i];
-                            resolvedhostname = Dns.GetHostEntry(addressreturn).HostName;
-                            break;
+                            Ping ping = new Ping();
+                            PingReply pingReply = ping.Send(addresspending[i], 500);
+                            if (pingReply.Status != IPStatus.BadDestination)
+                            {
+                                addressreturn = addresspending[i];
+                                break;
+                            }
+                            else
+                                addressreturn = addresspending[0];
                         }
-                        else if (i == (addresspending.Length - 1))
-                        {
-                            addressreturn = addresspending[0];
-                            resolvedhostname = Dns.GetHostEntry(addressreturn).HostName;
-                        }
+                        resolvedhostname = Dns.GetHostEntry(addressreturn).HostName;
                     }
             }
             catch (Exception exception)
             {
-                if (addressreturn == null)
-                    ExceptionLogcat(exception);
+                ExceptionLogcat(exception);
             }
             return new DataSct.PingParam { destinationaddress = addressreturn, resolvedhostname = resolvedhostname };
         }
@@ -562,7 +566,6 @@ namespace Auto_Ping_Csharp
                     Name = "Ping Worker",
                     Priority = ThreadPriority.AboveNormal
                 };
-                controlon.Reset();
                 pingworker.Start((object)pingparamdata);
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Ping worker launcher has been called.");
             }
