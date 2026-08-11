@@ -1,20 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using System.Net.NetworkInformation;
-using System.Net;
-using System.Threading;
-using System.Collections;
 
 namespace Auto_Ping_Csharp
 {
@@ -25,14 +15,14 @@ namespace Auto_Ping_Csharp
     {
         public struct PingParam
         {
-            public string       destination;
-            public IPAddress    destinationaddress;
-            public string       resolvedhostname;
-            public Int32        buffersize;
-            public bool         dflag;
-            public Int32        ttl;
-            public Int32        timeout;
-            public Int32        interval;
+            public string destination;
+            public IPAddress destinationaddress;
+            public string resolvedhostname;
+            public Int32 buffersize;
+            public bool dflag;
+            public Int32 ttl;
+            public Int32 timeout;
+            public Int32 interval;
         };
     }
 
@@ -40,25 +30,25 @@ namespace Auto_Ping_Csharp
     {
         public enum StatusSign
         {
-            NetworkAvailability =   1,
-            Loopback            =   2,
-            SmoothPing          =   3,
-            PackageLoss         =   4,
-            CurrentPing         =   5,
-            Exception           =  -1,
-            Error               =  -2,
-            Warning             =  -3,
-            Important           =  -4,
-            Information         =  -5
+            NetworkAvailability = 1,
+            Loopback = 2,
+            SmoothPing = 3,
+            PackageLoss = 4,
+            CurrentPing = 5,
+            Exception = -1,
+            Error = -2,
+            Warning = -3,
+            Important = -4,
+            Information = -5
         };
 
         public enum FieldSign
         {
             Destination = 1,
-            BufferSize  = 2,
-            TTL         = 3,
-            TimeOut     = 4,
-            Interval    = 5
+            BufferSize = 2,
+            TTL = 3,
+            TimeOut = 4,
+            Interval = 5
         };
     }
 
@@ -69,7 +59,8 @@ namespace Auto_Ping_Csharp
         public Thread localcheck, networkstate, pingworker;
         public static Int32 default_buffer = 32, default_ttl = 64, default_timeout = 5000, default_interval = 1000, default_timewindow = 120000,
             default_networkcheckinterval = 4000, default_loopbackcheckinterval = 4000;
-        public ArrayList RTT = new ArrayList();
+        // Modernized: strongly-typed list for RTT values (nullable longs to indicate failed entries)
+        public List<long?> RTT = new List<long?>();
         public Int32 statisticpackcount, sentpackcount, successpackcount, failedpackcount;
         public Int64 totalrtt;
         public EventWaitHandle alwayson = new EventWaitHandle(false, EventResetMode.ManualReset);
@@ -127,14 +118,9 @@ namespace Auto_Ping_Csharp
             bool loopv4, loopv6;
             StatusUpdater statusUpdate = StdUpd;
             PingReply rplv4 = loopbackping.Send("127.0.0.1", 100), rplv6 = loopbackping.Send("::1", 100);
-            if (rplv4.Status == IPStatus.Success)
-                loopv4 = true;
-            else
-                loopv4 = false;
-            if (rplv6.Status == IPStatus.Success)
-                loopv6 = true;
-            else
-                loopv6 = false;
+            loopv4 = (rplv4.Status == IPStatus.Success);
+            loopv6 = (rplv6.Status == IPStatus.Success);
+
             if (localcheck.IsAlive)
             {
                 if (loopv4 && loopv6)
@@ -163,10 +149,8 @@ namespace Auto_Ping_Csharp
             DataSct.PingParam receivehostentry = FetchHostAddress(pingparamdata.destination);
             pingparamdata.resolvedhostname = receivehostentry.resolvedhostname;
             pingparamdata.destinationaddress = receivehostentry.destinationaddress;
-            if (pingparamdata.destinationaddress != null)
-                pingallowed = true;
-            else
-                pingallowed = false;
+            pingallowed = (pingparamdata.destinationaddress != null);
+
             if (pingallowed)
             {
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Destination check OK.");
@@ -210,6 +194,7 @@ namespace Auto_Ping_Csharp
                 destinationdisplay = pingparamdata.destinationaddress.ToString();
             try
             {
+                // Use pingparamdata.dflag (Don't Fragment flag) for PingOptions
                 PingReply pingReply = pingwork.Send(pingparamdata.destinationaddress, pingparamdata.timeout, new byte[pingparamdata.buffersize], new PingOptions(pingparamdata.ttl, pingparamdata.dflag));
                 lock (totalaccesslock)
                 {
@@ -218,15 +203,15 @@ namespace Auto_Ping_Csharp
                 }
                 if (pingReply.Status == IPStatus.Success)
                 {
-                    PackCouter(true, pingReply.RoundtripTime);
+                    PackCounter(true, pingReply.RoundtripTime);
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.CurrentPing, pingReply.RoundtripTime.ToString("0ms"));
                     if (((pingReply.RoundtripTime > pingparamdata.interval) && (pingparamdata.interval >= 500)) || (pingReply.RoundtripTime >= 1000))
                         Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Warning, destinationdisplay + " ICMP reply latecy too long: " + pingReply.RoundtripTime.ToString("0ms"));
                 }
                 else
                 {
-                    PackCouter(false, null);
-                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, destinationdisplay + " " + ICMPErrorAnalasys(pingReply.Status));
+                    PackCounter(false, null);
+                    Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, destinationdisplay + " " + ICMPErrorAnalysys(pingReply.Status));
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.CurrentPing, "Failed");
                 }
             }
@@ -234,13 +219,15 @@ namespace Auto_Ping_Csharp
             {
                 ExceptionLogcat(exception);
             }
-            double averagepingtime, packetlossrate;
+            double averagepingtime = -1, packetlossrate = -1;
             lock (statisticaccesslock)
             {
-                averagepingtime = (double)totalrtt / (double)successpackcount;
+                if (successpackcount > 0)
+                    averagepingtime = (double)totalrtt / (double)successpackcount;
                 lock (totalaccesslock)
                 {
-                    packetlossrate = (double)failedpackcount / (double)sentpackcount;
+                    if (sentpackcount > 0)
+                        packetlossrate = (double)failedpackcount / (double)sentpackcount;
                 }
             }
             if (averagepingtime >= 0)
@@ -255,7 +242,8 @@ namespace Auto_Ping_Csharp
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Ping worker launcher died.");
         }
 
-        public void PackCouter(bool issuccess, object roundtriptime)
+        // Modernized PackCounter signature and internals
+        public void PackCounter(bool issuccess, long? roundtriptime)
         {
             lock (statisticaccesslock)
             {
@@ -264,7 +252,7 @@ namespace Auto_Ping_Csharp
                     if (RTT[0] != null)
                     {
                         successpackcount -= 1;
-                        totalrtt -= (Int64)RTT[0];
+                        totalrtt -= (Int64)RTT[0].Value;
                     }
                     else
                         failedpackcount -= 1;
@@ -273,7 +261,7 @@ namespace Auto_Ping_Csharp
                 if (issuccess)
                 {
                     successpackcount += 1;
-                    totalrtt += (Int64)roundtriptime;
+                    totalrtt += (Int64)roundtriptime.Value;
                 }
                 else
                     failedpackcount += 1;
@@ -313,11 +301,11 @@ namespace Auto_Ping_Csharp
 
         public DataSct.PingParam FetchHostAddress(string sourceinput)
         {
-            IPAddress[] addresspending = null;
             IPAddress addressreturn = null;
             string resolvedhostname = null;
             try
             {
+                IPAddress[] addresspending;
                 if (!IPAddress.TryParse(sourceinput, out addressreturn))
                     if ((addresspending = Dns.GetHostAddresses(sourceinput)) != null)
                     {
@@ -333,7 +321,9 @@ namespace Auto_Ping_Csharp
                             else
                                 addressreturn = addresspending[0];
                         }
-                        resolvedhostname = Dns.GetHostEntry(addressreturn).HostName;
+                        var hostEntry = Dns.GetHostEntry(addressreturn);
+                        if (hostEntry != null)
+                            resolvedhostname = hostEntry.HostName;
                     }
             }
             catch (Exception exception)
@@ -345,8 +335,7 @@ namespace Auto_Ping_Csharp
 
         public void StdUpd(ValueSign.StatusSign field, string data)
         {
-            DateTime dateTimeUTC = DateTime.UtcNow;
-            string timeUTCstring = dateTimeUTC.Hour.ToString("00:") + dateTimeUTC.Minute.ToString("00:") + dateTimeUTC.Second.ToString("00") + "." + dateTimeUTC.Millisecond.ToString("000");
+            string timeUTCstring = DateTime.UtcNow.ToString("HH:mm:ss.fff");
             lock (statusrefreshlock)
             {
                 switch (field)
@@ -356,11 +345,11 @@ namespace Auto_Ping_Csharp
                     case ValueSign.StatusSign.SmoothPing: Average_Ping.Content = "SmoothPing:" + data; break;
                     case ValueSign.StatusSign.PackageLoss: Pack_Loss.Content = "PL:" + data; break;
                     case ValueSign.StatusSign.CurrentPing: Ping_Status.Content = "CurrentPing:" + data; break;
-                    case ValueSign.StatusSign.Exception: Logcat_Display.Text += (timeUTCstring + " XX" + data + "\n"); break;
-                    case ValueSign.StatusSign.Error: Logcat_Display.Text += (timeUTCstring + " X " + data + "\n"); break;
-                    case ValueSign.StatusSign.Warning: Logcat_Display.Text += (timeUTCstring + " ! " + data + "\n"); break;
-                    case ValueSign.StatusSign.Important: Logcat_Display.Text += (timeUTCstring + " o " + data + "\n"); break;
-                    case ValueSign.StatusSign.Information: Logcat_Display.Text += (timeUTCstring + " i " + data + "\n"); break;
+                    case ValueSign.StatusSign.Exception: Logcat_Display.Text += (timeUTCstring + " X " + data + "\n"); break;
+                    case ValueSign.StatusSign.Error: Logcat_Display.Text += (timeUTCstring + " E " + data + "\n"); break;
+                    case ValueSign.StatusSign.Warning: Logcat_Display.Text += (timeUTCstring + " W " + data + "\n"); break;
+                    case ValueSign.StatusSign.Important: Logcat_Display.Text += (timeUTCstring + " O " + data + "\n"); break;
+                    case ValueSign.StatusSign.Information: Logcat_Display.Text += (timeUTCstring + " I " + data + "\n"); break;
                     default: Logcat_Display.Text += (timeUTCstring + "???" + data + "\n"); break;
                 }
             }
@@ -368,7 +357,7 @@ namespace Auto_Ping_Csharp
 
         public void FldUpd(ValueSign.FieldSign field, string data)
         {
-            switch(field)
+            switch (field)
             {
                 case ValueSign.FieldSign.Destination: Destination_Fill.Text = data; break;
                 case ValueSign.FieldSign.BufferSize: Buffer_Size.Text = data; break;
@@ -379,30 +368,24 @@ namespace Auto_Ping_Csharp
             }
         }
 
+        // Replaced manual digit checks with TryParse-based validations below
         public bool CheckANumber(string input)
         {
-            Int32 a = input.Length;
-            bool flag = true;
-            for (Int32 i = 0; i < a; i++)
-                if (((byte)input[i] < 48) || ((byte)input[i] > 57))
-                    flag = false;
-            return flag;
+            return !string.IsNullOrEmpty(input) && int.TryParse(input, out _);
         }
 
         public Int32 CheckNumberBetween(Int32 input, Int32 min, Int32 max)
         {
-            Int32 result = input;
-            if (result >= min && result <= max)
-                return result;
+            if (input >= min && input <= max)
+                return input;
             else
                 return -1;
         }
 
-        public Int32 CheckNumberLarger(Int32 input,Int32 floor)
+        public Int32 CheckNumberLarger(Int32 input, Int32 floor)
         {
-            Int32 result = input;
-            if (result >= floor)
-                return result;
+            if (input >= floor)
+                return input;
             else
                 return -1;
         }
@@ -419,7 +402,7 @@ namespace Auto_Ping_Csharp
             Stop_Button.IsEnabled = !enabler;
         }
 
-        public string ICMPErrorAnalasys(IPStatus iPStatus)
+        public string ICMPErrorAnalysys(IPStatus iPStatus)
         {
             switch (iPStatus)
             {
@@ -434,7 +417,7 @@ namespace Auto_Ping_Csharp
                 /*case IPStatus.DestinationProhibited: return "Destination prohibited";*/
                 /*case IPStatus.DestinationProtocolUnreachable: return "Destination protocol unreachale";*/
                 case (IPStatus)11004: return "Destination protocol unreachable (IPv4) or Destination prohibited (IPv6) for configure reason";
-                case IPStatus.DestinationScopeMismatch:return "Destination Scope Mismatch";
+                case IPStatus.DestinationScopeMismatch: return "Destination Scope Mismatch";
                 case IPStatus.DestinationUnreachable: return "Destination unreachablefor unknown reason";
                 case IPStatus.HardwareError: return "Hardware error";
                 case IPStatus.IcmpError: return "ICMP error";
@@ -456,19 +439,19 @@ namespace Auto_Ping_Csharp
         {
             StatusUpdater statusUpdater = StdUpd;
             string exceptioninformation = "----EXCEPTION----\n";
-            if (exception.Message != null)
+            if (!string.IsNullOrEmpty(exception.Message))
                 exceptioninformation += ("==MESSAGE==\n" + exception.Message + "\n");
             if (exception.InnerException != null)
                 exceptioninformation += ("==INNER EXCEPTION==\n" + exception.InnerException.ToString() + "\n");
-            if (exception.Source != null)
+            if (!string.IsNullOrEmpty(exception.Source))
                 exceptioninformation += ("==Source==\n" + exception.Source + "\n");
             if (exception.TargetSite != null)
                 exceptioninformation += ("==TARGET SITE==\n" + exception.TargetSite.ToString() + "\n");
             if (exception.Data != null)
                 exceptioninformation += ("==DATA==\n" + exception.Data.ToString() + "\n");
-            if (exception.StackTrace != null)
+            if (!string.IsNullOrEmpty(exception.StackTrace))
                 exceptioninformation += ("==STACK TRACE==\n" + exception.StackTrace + "\n");
-            if (exception.HelpLink != null)
+            if (!string.IsNullOrEmpty(exception.HelpLink))
                 exceptioninformation += ("==HELP LINK==\n" + exception.HelpLink + "\n");
             Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Exception, exceptioninformation);
         }
@@ -483,9 +466,9 @@ namespace Auto_Ping_Csharp
             byte checker = 0x00;    //A bitfield checker
             FieldUpdater fieldUpdater = FldUpd;
             StatusUpdater statusUpdater = StdUpd;
-            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Statring validation...");
+            Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Starting validation...");
             //Valid IP or domain name
-            if (Destination_Fill.Text != "")
+            if (!string.IsNullOrWhiteSpace(Destination_Fill.Text))
             {
                 dest = Destination_Fill.Text;
                 checker = (byte)(checker | (byte)0x01);
@@ -493,54 +476,70 @@ namespace Auto_Ping_Csharp
             else
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "No destination filled.");
             //Valid buffer size
-            if (Buffer_Size.Text != "")
-                if (CheckANumber(Buffer_Size.Text))
-                    if ((bufferlength = CheckNumberBetween(Convert.ToInt32(Buffer_Size.Text), 32, 65500)) != -1)
+            if (!string.IsNullOrWhiteSpace(Buffer_Size.Text))
+            {
+                if (int.TryParse(Buffer_Size.Text, out int parsedBuffer))
+                {
+                    if ((bufferlength = CheckNumberBetween(parsedBuffer, 32, 65500)) != -1)
                         checker = (byte)(checker | (byte)0x02);
                     else
                         Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid buffer size setting.");
+                }
                 else
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid buffer size Input.");
+            }
             else
             {
                 Dispatcher.Invoke(fieldUpdater, ValueSign.FieldSign.BufferSize, bufferlength.ToString());
                 checker = (byte)(checker | (byte)0x02);
             }
             //Valid TTL
-            if (TTL_Count.Text != "")
-                if (CheckANumber(TTL_Count.Text))
-                    if ((ttlvalue = CheckNumberBetween(Convert.ToInt32(TTL_Count.Text), 1, 255)) != -1)
+            if (!string.IsNullOrWhiteSpace(TTL_Count.Text))
+            {
+                if (int.TryParse(TTL_Count.Text, out int parsedTTL))
+                {
+                    if ((ttlvalue = CheckNumberBetween(parsedTTL, 1, 255)) != -1)
                         checker = (byte)(checker | (byte)0x04);
                     else
                         Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid TTL Value.");
+                }
                 else
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid TTL Input.");
+            }
             else
             {
                 Dispatcher.Invoke(fieldUpdater, ValueSign.FieldSign.TTL, ttlvalue.ToString());
                 checker = (byte)(checker | (byte)0x04);
             }
             //Valid Timeout
-            if (Timeout_Count.Text != "")
-                if (CheckANumber(Timeout_Count.Text))
-                    if ((timeout = CheckNumberLarger(Convert.ToInt32(Timeout_Count.Text), 1)) != -1)
+            if (!string.IsNullOrWhiteSpace(Timeout_Count.Text))
+            {
+                if (int.TryParse(Timeout_Count.Text, out int parsedTimeout))
+                {
+                    if ((timeout = CheckNumberLarger(parsedTimeout, 1)) != -1)
                         checker = (byte)(checker | (byte)0x08);
                     else { }
+                }
                 else
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid timeout input.");
+            }
             else
             {
                 Dispatcher.Invoke(fieldUpdater, ValueSign.FieldSign.TimeOut, timeout.ToString());
                 checker = (byte)(checker | (byte)0x08);
             }
             //Valid interval
-            if (Interval_Count.Text != "")
-                if (CheckANumber(Interval_Count.Text))
-                    if ((interval = CheckNumberLarger(Convert.ToInt32(Interval_Count.Text), 1)) != -1)
+            if (!string.IsNullOrWhiteSpace(Interval_Count.Text))
+            {
+                if (int.TryParse(Interval_Count.Text, out int parsedInterval))
+                {
+                    if ((interval = CheckNumberLarger(parsedInterval, 1)) != -1)
                         checker = (byte)(checker | (byte)0x10);
                     else { }
+                }
                 else
                     Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Error, "Invalid interval input.");
+            }
             else
             {
                 Dispatcher.Invoke(fieldUpdater, ValueSign.FieldSign.Interval, interval.ToString());
@@ -550,11 +549,11 @@ namespace Auto_Ping_Csharp
             if (checker == 0x1F)
             {
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Information, "Validation completed, preparing...");
-                DataSct.PingParam pingparamdata = new DataSct.PingParam
+                DataSct.PingParam pingparamdata = new DataSct.PingParam()
                 {
                     destination = dest,
                     buffersize = bufferlength,
-                    dflag = Is_DF.IsChecked.Value,
+                    dflag = Is_DF.IsChecked.HasValue && Is_DF.IsChecked.Value,
                     ttl = ttlvalue,
                     timeout = timeout,
                     interval = interval
@@ -576,7 +575,7 @@ namespace Auto_Ping_Csharp
         private void Stop_Button_Click(object sender, RoutedEventArgs e)
         {
             StatusUpdater statusUpdater = StdUpd;
-            if (pingworker.IsAlive)
+            if (pingworker != null && pingworker.IsAlive)
                 Dispatcher.Invoke(statusUpdater, ValueSign.StatusSign.Important, "Calling ping worker launcher to the hell...");
             controlon.Set();
             UIElementEnabler(true);
