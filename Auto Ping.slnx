@@ -1,0 +1,18 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Auto Ping/Auto Ping.vcxproj" />
+  <Project Path="Auto Ping Csharp/Auto Ping Csharp.csproj" />
+  <Project Path="Auto Ping Test/Auto Ping Test.csproj" />
+  <BuildProject Name="Auto Ping" Configuration="Debug" Platform="x64" />
+  <BuildProject Name="Auto Ping" Configuration="Release" Platform="x64" />
+  <BuildProject Name="Auto Ping" Configuration="Debug" Platform="x86" />
+  <BuildProject Name="Auto Ping" Configuration="Release" Platform="x86" />
+  <BuildProject Name="Auto Ping Csharp" Configuration="Debug" Platform="Any CPU" />
+  <BuildProject Name="Auto Ping Csharp" Configuration="Release" Platform="Any CPU" />
+  <BuildProject Name="Auto Ping Test" Configuration="Debug" Platform="Any CPU" />
+  <BuildProject Name="Auto Ping Test" Configuration="Release" Platform="Any CPU" />
+</Solution>
